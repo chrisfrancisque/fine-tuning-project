@@ -1,3 +1,5 @@
+(READ THIS IN CODE)
+
 BERT Fine-tuning on Google Cloud TPU v3-8
 A comprehensive implementation of BERT-base fine-tuning using Google Cloud TPUs.
 
