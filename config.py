@@ -15,11 +15,11 @@ class TrainingConfig:
     train_samples: int = 10000
 
     #Training Settings
-    per_device_train_batch_size: int = 32
+    per_device_train_batch_size: int = 16
     per_device_eval_batch_size: int = 8
-    learning_rate: float = 2e-5
-    num_train_epochs: int = 6
-    warmup_steps: int = 100 
+    learning_rate: float = 5e-6
+    num_train_epochs: int = 8
+    warmup_steps: int = 500 
     weight_decay: float = 0.01
 
     #TPU settings

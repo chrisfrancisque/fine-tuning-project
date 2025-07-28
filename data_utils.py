@@ -57,6 +57,7 @@ def load_and_prepare_dataset(config):
         remove_columns=['idx', 'sentence']
     )
     
+    
     # Rename 'label' to 'labels' for BERT
     tokenized_datasets = tokenized_datasets.rename_column('label', 'labels')
     
