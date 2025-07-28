@@ -49,10 +49,15 @@ def plot_training_loss(losses, steps, output_dir):
 def plot_confusion_matrix(y_true, y_pred, output_dir):
     """Plot Confusion Matrix"""
     cm = confusion_matrix(y_true, y_pred)
+
+    #Flip Confusion matrix for normal layout
+    cm = np.flipud(np.fliplr(cm))
+
+    
     plt.figure(figsize=(8,6))
     sns.heatmap(cm, annot=True, fmt='d', cmap = 'Blues',
-                xticklabels=['Negative', 'Positive'],
-                yticklabels=['Negative', 'Positive'])
+               xticklabels=['Positive', 'Negative'],
+                yticklabels=['Positive', 'Negative'])  
     plt.xlabel('Predicted Label', fontsize=12)
     plt.ylabel('True Label', fontsize=12)
     plt.title('Confusion Matrix of BERT on SST-2', fontsize=14)
@@ -120,9 +125,9 @@ def train_bert_on_tpu(index):
         print(f"Total batch size: {config.total_train_batch_size}")
     
 
-    # Load data (only on master to avoid duplication)
-    if xm.is_master_ordinal():
-        train_dataset, eval_dataset, tokenizer = load_and_prepare_dataset(config)
+    
+     # Load data on ALL processes
+    train_dataset, eval_dataset, tokenizer = load_and_prepare_dataset(config)
     
     
     # Synchronize to ensure data is loaded

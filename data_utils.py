@@ -1,11 +1,11 @@
+# Fixed data_utils.py
 from datasets import load_dataset, DownloadConfig
 from transformers import AutoTokenizer
 from torch.utils.data import DataLoader
 import torch
-import os
 
 def load_and_prepare_dataset(config):
-    """Load and tokenize SST-2 dataset"""
+    """Load and tokenize SST-2 dataset with fix for ax dataset issue"""
     print("Loading SST-2 dataset with forced fresh download...")
     
     # Force fresh download to avoid cache issues
@@ -46,8 +46,8 @@ def load_and_prepare_dataset(config):
             examples['sentence'],
             padding='max_length',
             truncation=True,
-            max_length=config.max_seq_length,
-            return_tensors='pt'
+            max_length=config.max_seq_length
+            # Don't use return_tensors='pt' here
         )
     
     # Tokenize datasets
@@ -56,6 +56,12 @@ def load_and_prepare_dataset(config):
         batched=True,
         remove_columns=['idx', 'sentence']
     )
+    
+    # Rename 'label' to 'labels' for BERT
+    tokenized_datasets = tokenized_datasets.rename_column('label', 'labels')
+    
+    # Set format for PyTorch
+    tokenized_datasets.set_format('torch', columns=['input_ids', 'attention_mask', 'labels'])
 
     # Select subset if specified
     if config.train_samples > 0:
