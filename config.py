@@ -19,7 +19,7 @@ class TrainingConfig:
     per_device_eval_batch_size: int = 8
     learning_rate: float = 5e-6
     num_train_epochs: int = 8
-    warmup_steps: int = 500 
+    warmup_steps: int = 501 
     weight_decay: float = 0.01
 
     #TPU settings
