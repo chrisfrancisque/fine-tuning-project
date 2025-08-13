@@ -51,7 +51,7 @@ def evaluate(model, dataloader, device):
         loss = outputs.loss
         logits = outputs.logits
 
-        total_loss += loss.items()
+        total_loss += loss.item()
 
         predictions = torch.argmax(logits, dim=1)
         all_predictions.extend(predictions.cpu().numpy())
@@ -64,18 +64,26 @@ def evaluate(model, dataloader, device):
 
 def main():
     # Set device
-
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"Using deviceL {device}")
+    print(f"Using device: {device}")
 
-    train_dataset, eval_dataset, tokenizer = load_and_prepare_dataset(config)
+    # Load datasets
+    train_dataset, eval_dataset, _ = load_and_prepare_dataset(config)  # Ignore tokenizer from here
+    
+    # Load baseline model
+    model, tokenizer, baseline_info = create_model(config, use_baseline=True, device=device)
+    model.to(device)
+    
+    print(f"\n{'='*50}")
+    print(f"Using warmed baseline model")
+    print(f"Baseline accuracy: {baseline_info.get('warm_up_accuracy', 0):.4f}")
+    print(f"Total parameters: {sum(p.numel() for p in model.parameters()):,}")
+    print(f"{'='*50}\n")
+    
+    # Create dataloaders
     train_dataloader, eval_dataloader = create_dataloaders(
         train_dataset, eval_dataset, config
     )
-
-    #Create model
-    model = create_model(config)
-    model.to(device)
 
     #Calculate total training steps
     total_steps = len(train_dataloader) * config.num_train_epochs

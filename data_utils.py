@@ -17,12 +17,7 @@ def load_and_prepare_dataset(config):
     
     try:
         # Primary method: Force fresh download
-        dataset = load_dataset(
-            'glue',
-            'sst2',
-            download_config=download_config,
-            verification_mode='no_checks'
-        )
+        dataset = load_dataset('glue', 'sst2')
         print("✓ Successfully loaded SST-2 dataset")
         
     except Exception as e:

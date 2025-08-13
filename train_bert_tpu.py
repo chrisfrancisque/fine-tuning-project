@@ -1,5 +1,6 @@
 import os
 import torch
+import sys
 
 try:
     import torch_xla
@@ -19,6 +20,7 @@ from config import config
 from data_utils import load_and_prepare_dataset, create_dataloaders
 from model_utils import create_model, compute_metrics
 import numpy as np
+from load_baseline import load_baseline_model  # Add this new import
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, roc_auc_score, confusion_matrix
 import matplotlib
 matplotlib.use('Agg')
@@ -124,15 +126,37 @@ def train_bert_on_tpu(index):
         print(f"Starting training on TPU core {index}")
         print(f"Total batch size: {config.total_train_batch_size}")
     
-
-    
-     # Load data on ALL processes
-    train_dataset, eval_dataset, tokenizer = load_and_prepare_dataset(config)
-    
+    # Load data on ALL processes (ignore tokenizer from dataset loading)
+    train_dataset, eval_dataset, _ = load_and_prepare_dataset(config)  # <-- CHANGED: underscore instead of tokenizer
     
     # Synchronize to ensure data is loaded
     xm.rendezvous("data_loading")
     
+    
+    if xm.is_master_ordinal():
+        xm.master_print("Loading warmed baseline model...")
+    
+    model, tokenizer, baseline_info = load_baseline_model(
+        baseline_path='baseline_model_seed42',
+        device='cpu'  # Load to CPU first, then move to TPU
+    )
+    model.to(device)
+    
+    if xm.is_master_ordinal():
+        xm.master_print(f"✓ Using warmed baseline model")
+        xm.master_print(f"  Baseline accuracy: {baseline_info.get('warm_up_accuracy', 0):.4f}")
+        xm.master_print(f"  Total parameters: {sum(p.numel() for p in model.parameters()):,}")
+        xm.master_print("="*50)
+    
+    
+    # Create dataloaders  
+    train_dataloader, eval_dataloader = create_dataloaders(
+        train_dataset, eval_dataset, config
+    )
+    
+    # Wrap dataloaders for TPU
+    train_device_loader = pl.MpDeviceLoader(train_dataloader, device)
+    eval_device_loader = pl.MpDeviceLoader(eval_dataloader, device)
     # Create dataloaders
     train_dataloader, eval_dataloader = create_dataloaders(
         train_dataset, eval_dataset, config
@@ -283,9 +307,15 @@ def train_bert_on_tpu(index):
         xm.master_print(f"ROC-AUC: {metrics['roc_auc']:.4f}" if metrics['roc_auc'] != 'N/A' else "ROC-AUC: N/A")
         
         # Save model
+       # Save model and tokenizer
         model_path = os.path.join(output_dir, 'bert_tpu_model')
         xm.save(model.state_dict(), f"{model_path}.pt")
+        
+        # Save tokenizer too (it's from baseline)
+        tokenizer.save_pretrained(model_path)
+        
         xm.master_print(f"Model saved to {model_path}.pt")
+        xm.master_print(f"Tokenizer saved to {model_path}/")
         
         xm.master_print(f"\nAll results saved to: {output_dir}")
     

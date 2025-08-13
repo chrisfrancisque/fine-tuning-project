@@ -12,14 +12,14 @@ class TrainingConfig:
     #Data settings
     dataset_name: str = 'sst2'
     max_seq_length: int = 128
-    train_samples: int = 10000
+    train_samples: int = 1000
 
     #Training Settings
     per_device_train_batch_size: int = 16
     per_device_eval_batch_size: int = 8
     learning_rate: float = 5e-6
     num_train_epochs: int = 8
-    warmup_steps: int = 502 
+    warmup_steps: int = 500 
     weight_decay: float = 0.01
 
     #TPU settings

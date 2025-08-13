@@ -1,0 +1,18 @@
+{
+    "timestamp": "20250813_130535",
+    "seed": 42,
+    "device": "mps",
+    "warm_up_epochs": 1,
+    "trainable_params": 1538,
+    "frozen_params": 109482240,
+    "total_params": 109483778,
+    "train_samples": 1000,
+    "warm_up_train_loss": 0.6932474288248247,
+    "warm_up_eval_loss": 0.6917779713595679,
+    "warm_up_accuracy": 0.5057339449541285,
+    "classifier_weight_change": 5.09352539665997e-05,
+    "classifier_bias_change": 6.434423266910017e-05,
+    "model_name": "bert-base-uncased",
+    "learning_rate": 5e-06,
+    "batch_size": 16
+}
