@@ -171,8 +171,8 @@ def main():
     run_root = f"{args.output_root}_{ts}"
     flags = {"cfg": cfg, "baseline_path": args.baseline_path, "run_root": run_root}
 
-    # v3-8 has 8 cores; torch_xla 2.7 (PJRT) no longer provides xm.xrt_world_size()
-    xmp.spawn(train_worker, args=(flags,), nprocs=8)
+    # PJRT spawn: let it auto-detect all TPU cores (do not pass nprocs)
+    xmp.spawn(train_worker, args=(flags,))
 
 if __name__ == "__main__":
     main()
