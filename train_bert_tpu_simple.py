@@ -1,15 +1,12 @@
 import argparse
 import json
-import math
 import os
 from datetime import datetime
 
 import torch
 from torch.optim import AdamW
-import torch.nn.functional as F
 from transformers import AutoModelForSequenceClassification, get_linear_schedule_with_warmup
 
-# XLA
 import torch_xla
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.xla_multiprocessing as xmp
@@ -33,13 +30,15 @@ def train_worker(rank, flags):
     cfg = flags["cfg"]
     baseline_path = flags["baseline_path"]
     run_root = flags["run_root"]
-    world_size = xm.xrt_world_size()
+
+    # Derive world size robustly under PJRT
+    world_size = len(xm.get_xla_supported_devices())
 
     # Repro
     set_all_seeds(cfg.seed, rank)
 
     device = xm.xla_device()
-    xm.master_print(f"[rank {rank}] Device: {device}")
+    xm.master_print(f"[rank {rank}] Device: {device} | world_size={world_size}")
 
     # Data & tokenizer
     tokenized, tokenizer = load_sst2_tokenized(cfg.model_name_or_path, cfg.max_seq_length)
@@ -49,13 +48,12 @@ def train_worker(rank, flags):
         cfg.model_name_or_path, num_labels=2
     )
     # Load warmed baseline
-    model, missing, unexpected = load_warmed_baseline(model, flags["baseline_path"])
+    model, missing, unexpected = load_warmed_baseline(model, baseline_path)
     xm.master_print(f"[baseline] missing={len(missing)} unexpected={len(unexpected)}")
 
     model.to(device)
 
     # Optimizer & scheduler
-    # Compute steps_per_epoch from loader after it's built; construct scheduler after first epoch's steps known.
     optimizer = AdamW(model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
 
     # Build loaders for epoch 0 to discover steps_per_epoch
@@ -98,7 +96,6 @@ def train_worker(rank, flags):
                 "token_type_ids": batch.get("token_type_ids", None),
                 "labels": batch["labels"],
             }
-            # Some tokenizers drop token_type_ids; handle None
             if inputs["token_type_ids"] is None:
                 inputs.pop("token_type_ids")
 
@@ -106,10 +103,10 @@ def train_worker(rank, flags):
             loss = outputs.loss
 
             loss.backward()
-            xm.optimizer_step(optimizer)
+            xm.optimizer_step(optimizer)        # XLA-safe optimizer step
             optimizer.zero_grad(set_to_none=True)
             scheduler.step()
-            xm.mark_step()
+            xm.mark_step()                       # Execute the compiled graph
 
             running_loss += loss.item()
             steps_done += 1
@@ -117,7 +114,7 @@ def train_worker(rank, flags):
             if (step % 50 == 0) and xm.is_master_ordinal():
                 xm.master_print(f"Epoch {epoch} | Step {step}/{steps_per_epoch} | loss={running_loss/steps_done:.4f}")
 
-        # End-of-epoch eval (one sync via mesh_reduce)
+        # End-of-epoch eval (single sync via mesh_reduce)
         model.eval()
         correct_local = 0
         total_local = 0
@@ -137,14 +134,12 @@ def train_worker(rank, flags):
                 correct_local += (preds == labels).sum().item()
                 total_local   += preds.size(0)
 
-        # Aggregate across ranks
         acc = mesh_mean("eval_acc", correct_local / max(1, total_local))
         train_loss_mean = mesh_mean("train_loss", running_loss / max(1, steps_done))
 
         if xm.is_master_ordinal():
             xm.master_print(f"[Epoch {epoch}] acc={acc:.4f} | train_loss={train_loss_mean:.4f}")
 
-            # Save checkpoint (master-only)
             ckpt_dir = os.path.join(run_root, f"checkpoint_epoch_{epoch}")
             os.makedirs(ckpt_dir, exist_ok=True)
             xm.save(model.state_dict(), os.path.join(ckpt_dir, "checkpoint.pt"))
@@ -172,19 +167,12 @@ def train_worker(rank, flags):
 def main():
     args = parse_args()
     cfg = get_config(args.profile)
-
-    # Timestamped run directory
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_root = f"{args.output_root}_{ts}"
+    flags = {"cfg": cfg, "baseline_path": args.baseline_path, "run_root": run_root}
 
-    flags = {
-        "cfg": cfg,
-        "baseline_path": args.baseline_path,
-        "run_root": run_root,
-    }
-
-    # Spawn across TPU cores
-    xmp.spawn(train_worker, args=(flags,), nprocs=xm.xrt_world_size())
+    # v3-8 has 8 cores; torch_xla 2.7 (PJRT) no longer provides xm.xrt_world_size()
+    xmp.spawn(train_worker, args=(flags,), nprocs=8)
 
 if __name__ == "__main__":
     main()
