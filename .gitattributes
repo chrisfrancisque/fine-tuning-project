@@ -1,1 +1,11 @@
-baseline_model_seed42/pytorch_model.bin filter=lfs diff=lfs merge=lfs -text
+# Track all .bin files with Git LFS
+*.bin filter=lfs diff=lfs merge=lfs -text
+*.msgpack filter=lfs diff=lfs merge=lfs -text
+*.h5 filter=lfs diff=lfs merge=lfs -text
+*.tflite filter=lfs diff=lfs merge=lfs -text
+*.tar.gz filter=lfs diff=lfs merge=lfs -text
+
+# Track model checkpoint directories
+warmed_baseline_60pct/*.bin filter=lfs diff=lfs merge=lfs -text
+results_*/checkpoint_*/*.bin filter=lfs diff=lfs merge=lfs -text
+results_*/final_model*/*.bin filter=lfs diff=lfs merge=lfs -text

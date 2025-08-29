@@ -1,8 +1,0 @@
-BERT Fine-tuning Results on SST-2
-==================================================
-
-Accuracy: 0.9048 (90.48%)
-Precision: 0.8985
-Recall: 0.9167
-F1-Score: 0.9075
-ROC-AUC: 0.9657
