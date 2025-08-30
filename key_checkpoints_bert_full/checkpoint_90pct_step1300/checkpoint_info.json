@@ -1,0 +1,8 @@
+{
+  "step": 1300,
+  "epoch": 2,
+  "accuracy": 0.9085648148148148,
+  "improvement_from_baseline": 0.33564814814814814,
+  "avg_loss": 0.1760595703125,
+  "checkpoint_number": 12
+}

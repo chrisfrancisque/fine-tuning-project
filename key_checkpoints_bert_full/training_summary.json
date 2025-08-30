@@ -1,0 +1,7 @@
+{
+  "baseline_accuracy": 0.5729166666666666,
+  "final_accuracy": 0.90625,
+  "total_improvement": 0.33333333333333337,
+  "total_steps": 1875,
+  "total_checkpoints": 18
+}
