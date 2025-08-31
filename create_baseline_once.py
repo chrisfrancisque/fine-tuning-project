@@ -1,6 +1,5 @@
 """
-Create a warmed baseline model with ~60% accuracy.
-This script should be run ONCE to create a consistent starting point.
+Create a baseline model with 500 samples - targeting ~60% accuracy
 """
 
 import torch
@@ -14,7 +13,7 @@ import os
 from datetime import datetime
 
 def create_warmed_baseline_60pct():
-    """Create and save a 60% accuracy baseline"""
+    """Create baseline with 500 samples"""
     
     # Set seeds for reproducibility
     torch.manual_seed(42)
@@ -31,134 +30,123 @@ def create_warmed_baseline_60pct():
     )
     tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
     
-    # Store initial classifier weights to verify training
-    initial_classifier_weight = model.classifier.weight.data.clone()
-    
-    # Freeze encoder, train only classifier and pooler
+    # ONLY train classifier layer
     trainable_params = []
     frozen_params = []
+    
     for name, param in model.named_parameters():
-        if 'encoder' in name:
-            param.requires_grad = False
-            frozen_params.append(name)
-        else:
+        if 'classifier' in name:
             param.requires_grad = True
             trainable_params.append(name)
             print(f"Training: {name}")
+        else:
+            param.requires_grad = False
+            frozen_params.append(name)
     
-    print(f"\nTrainable parameters: {len(trainable_params)}")
-    print(f"Frozen parameters: {len(frozen_params)}")
+    print(f"\n✓ Trainable parameters: {len(trainable_params)}")
+    print(f"✓ Frozen parameters: {len(frozen_params)}")
+    
+    # Count actual parameters
+    trainable_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    total_count = sum(p.numel() for p in model.parameters())
+    print(f"✓ Training {trainable_count:,} / {total_count:,} parameters ({trainable_count/total_count*100:.2f}%)")
     
     model.to(device)
     
-    # Load data - use subset for baseline training
+    # Use 500 samples instead of 1000
     temp_config = config
-    temp_config.train_samples = 5000  # Enough for stable training
+    temp_config.train_samples = 500  # Reduced to 500
     train_dataset, eval_dataset, _ = load_and_prepare_dataset(temp_config)
     train_loader, eval_loader = create_dataloaders(train_dataset, eval_dataset, temp_config)
     
-    # High learning rate for classifier/pooler only
+    # Calculate actual number of batches
+    num_batches_available = len(train_loader)
+    print(f"✓ Total batches available: {num_batches_available}")
+    
+    # Same learning rate that worked
     optimizer = torch.optim.Adam(
         [p for p in model.parameters() if p.requires_grad],
-        lr=1e-3
+        lr=2e-3
     )
     
-    print(f"\nTraining classifier head to ~60% accuracy...")
+    print(f"\nTraining ONLY classifier head...")
+    print(f"Samples: 500")
+    print(f"Max steps: 40 (or {num_batches_available} if less)")
+    print(f"Learning rate: 2e-3")
     print("=" * 60)
     
-    # Train until 60% accuracy
-    best_accuracy = 0.0
-    training_history = []
+    # Train for up to 40 steps (but will stop at 31 with 500 samples)
+    model.train()
+    total_loss = 0
+    num_batches = 0
+    max_steps = 40
     
-    for epoch in range(10):  # Max 10 epochs
-        model.train()
-        total_loss = 0
-        num_batches = 0
-        
-        for batch in train_loader:
-            batch = {k: v.to(device) for k, v in batch.items()}
-            
-            outputs = model(**batch)
-            loss = outputs.loss
-            
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
-            
-            total_loss += loss.item()
-            num_batches += 1
-        
-        avg_train_loss = total_loss / num_batches
-        
-        # Evaluate
-        model.eval()
-        all_preds = []
-        all_labels = []
-        eval_loss = 0
-        
-        with torch.no_grad():
-            for batch in eval_loader:
-                batch = {k: v.to(device) for k, v in batch.items()}
-                outputs = model(**batch)
-                preds = torch.argmax(outputs.logits, dim=-1)
-                all_preds.extend(preds.cpu().numpy())
-                all_labels.extend(batch['labels'].cpu().numpy())
-                eval_loss += outputs.loss.item()
-        
-        accuracy = accuracy_score(all_labels, all_preds)
-        avg_eval_loss = eval_loss / len(eval_loader)
-        
-        training_history.append({
-            'epoch': epoch,
-            'train_loss': avg_train_loss,
-            'eval_loss': avg_eval_loss,
-            'accuracy': float(accuracy)
-        })
-        
-        print(f"Epoch {epoch}: Train Loss = {avg_train_loss:.4f}, "
-              f"Eval Loss = {avg_eval_loss:.4f}, Accuracy = {accuracy:.4f}")
-        
-        if accuracy >= 0.60:
-            best_accuracy = accuracy
-            print(f"\n✓ Target reached: {accuracy:.4f}")
+    for batch_idx, batch in enumerate(train_loader):
+        if batch_idx >= max_steps:
+            print(f"Stopping at {max_steps} steps")
             break
+            
+        batch = {k: v.to(device) for k, v in batch.items()}
         
-        best_accuracy = max(best_accuracy, accuracy)
+        outputs = model(**batch)
+        loss = outputs.loss
+        
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+        
+        total_loss += loss.item()
+        num_batches += 1
+        
+        if num_batches % 5 == 0:
+            print(f"  Step {num_batches}, Loss: {loss.item():.4f}")
     
-    # Check that classifier actually changed
-    final_classifier_weight = model.classifier.weight.data
-    weight_change = torch.mean(torch.abs(final_classifier_weight - initial_classifier_weight.to(device)))
-    print(f"\nClassifier weight change: {weight_change:.6f}")
+    avg_train_loss = total_loss / num_batches
     
-    if weight_change < 0.001:
-        print("⚠️ WARNING: Classifier weights barely changed!")
-    else:
-        print("✓ Classifier successfully trained")
+    # Evaluate
+    print(f"\nCompleted {num_batches} training steps")
+    print("Evaluating baseline...")
+    model.eval()
+    all_preds = []
+    all_labels = []
+    
+    with torch.no_grad():
+        for batch in eval_loader:
+            batch = {k: v.to(device) for k, v in batch.items()}
+            outputs = model(**batch)
+            preds = torch.argmax(outputs.logits, dim=-1)
+            all_preds.extend(preds.cpu().numpy())
+            all_labels.extend(batch['labels'].cpu().numpy())
+    
+    accuracy = accuracy_score(all_labels, all_preds)
+    
+    print(f"\n✓ Baseline accuracy: {accuracy:.4f}")
+    print(f"✓ Average training loss: {avg_train_loss:.4f}")
     
     # Unfreeze all parameters for future full fine-tuning
     for param in model.parameters():
         param.requires_grad = True
     
-    # Save the warmed baseline
+    # Save the baseline
     output_dir = "warmed_baseline_60pct"
     os.makedirs(output_dir, exist_ok=True)
     
-    # Save model (this creates pytorch_model.bin ~418MB)
     model.save_pretrained(output_dir)
     tokenizer.save_pretrained(output_dir)
     
-    # Save detailed metadata
+    # Save metadata
     metadata = {
-        'accuracy': float(best_accuracy),
+        'accuracy': float(accuracy),
         'seed': 42,
-        'train_samples': 5000,
-        'method': 'classifier_pooler_training',
-        'epochs_trained': len(training_history),
-        'classifier_weight_change': float(weight_change),
-        'training_history': training_history,
+        'train_samples': 500,
+        'train_steps': num_batches,
+        'max_steps': max_steps,
+        'learning_rate': 2e-3,
+        'train_loss': float(avg_train_loss),
         'created_at': datetime.now().isoformat(),
-        'bert_model': 'bert-base-uncased',
-        'num_labels': 2
+        'method': 'classifier_only_500samples',
+        'trainable_params': trainable_count,
+        'total_params': total_count
     }
     
     with open(f"{output_dir}/baseline_info.json", 'w') as f:
@@ -166,11 +154,12 @@ def create_warmed_baseline_60pct():
     
     print(f"\n{'='*60}")
     print(f"✓ Baseline saved to {output_dir}/")
-    print(f"✓ Final accuracy: {best_accuracy:.4f}")
-    print(f"✓ Model size: ~418MB (pytorch_model.bin)")
+    print(f"✓ Accuracy: {accuracy:.4f}")
+    print(f"✓ Trained for {num_batches} steps on 500 samples")
+    print(f"✓ Ready for full fine-tuning!")
     print(f"{'='*60}")
     
-    return model, tokenizer, best_accuracy
+    return model, tokenizer, accuracy
 
 if __name__ == "__main__":
     model, tokenizer, accuracy = create_warmed_baseline_60pct()
@@ -179,11 +168,3 @@ if __name__ == "__main__":
     print("\nVerifying saved model...")
     test_model = AutoModelForSequenceClassification.from_pretrained("warmed_baseline_60pct")
     print("✓ Model loads successfully")
-    
-    # Check file sizes
-    import os
-    baseline_dir = "warmed_baseline_60pct"
-    for file in os.listdir(baseline_dir):
-        filepath = os.path.join(baseline_dir, file)
-        size_mb = os.path.getsize(filepath) / (1024 * 1024)
-        print(f"  {file}: {size_mb:.2f} MB")
