@@ -2,7 +2,7 @@
 
 A comprehensive implementation of BERT-base full parameter fine-tuning (110M parameters) on SST-2, with checkpoint saving for comparative analysis with LoRA and MFT approaches.
 
-## 🎯 Project Overview
+## Project Overview
 
 This project is part of a three-way comparison study:
 - **Full Fine-Tuning** (this repo): Updates all 109.5M parameters
@@ -11,16 +11,9 @@ This project is part of a three-way comparison study:
 
 All methods start from the same warmed baseline model (~55% accuracy) for fair comparison.
 
-## 📊 Key Features
 
-- ✅ Warmed baseline model with pre-trained classifier
-- ✅ Checkpoint saving after each epoch
-- ✅ TPU v5/v6e optimized implementation
-- ✅ Comprehensive metrics and visualizations
-- ✅ Compatible with MFT checkpoint analysis
-- ✅ Local and cloud deployment options
 
-## 🏗️ Project Structure
+## Project Structure
 
 bert-tpu-project/
 ├── baseline_model_seed42/      # Warmed baseline model (shared across all methods)
@@ -38,7 +31,7 @@ bert-tpu-project/
 ├── requirements.txt           # Python dependencies
 └── README.md                  # This file
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -163,7 +156,7 @@ tqdm
 pyarrow==11.0.0
 fsspec==2023.5.0
 
-🐛 Troubleshooting
+Troubleshooting
 Issue: AttributeError: module 'torch._dynamo'
 Solution: Use Python 3.10, not 3.13
 
@@ -186,7 +179,7 @@ Use xm.optimizer_step() instead of optimizer.step()
 Monitor with xm.master_print() to avoid duplicate outputs
 Set TORCH_COMPILE_DISABLE=1 to avoid compilation hangs
 
-📊 Outputs
+Outputs
 Each training run creates:
 
 results_YYYYMMDD_HHMMSS/
